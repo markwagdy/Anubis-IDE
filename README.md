@@ -13,6 +13,7 @@ It's an **open source** IDE code Created by **Graduation Project** Team at Facul
 - Python3
 - Pyserial (**Important for detecting ports section**)
 - PYQT5
+- Install Virtual Serial port to choose a port from 
 
 ## Install Requirements 
 (It's recommended to create virtual env before installing the requirements)
@@ -32,5 +33,4 @@ If python3 is the default use this:
 - python3 Anubis.py
 
 ## Welcome
-
 (![Welcome](https://www4.0zz0.com/2020/07/22/02/133570716.png))

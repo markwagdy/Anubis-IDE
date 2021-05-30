@@ -6,7 +6,8 @@
 import sys
 import glob
 import serial
-
+from io import StringIO
+import contextlib
 import Python_Coloring
 from PyQt5 import QtCore
 from PyQt5 import QtGui
@@ -14,6 +15,14 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from pathlib import Path
 
+@contextlib.contextmanager
+def stdoutIO(stdout=None):
+    old = sys.stdout
+    if stdout is None:
+        stdout = StringIO()
+    sys.stdout = stdout
+    yield stdout
+    sys.stdout = old
 def serial_ports():
     """ Lists serial port names
         :raises EnvironmentError:
@@ -52,13 +61,13 @@ def serial_ports():
 #
 #
 class Signal(QObject):
-
     # initializing a Signal which will take (string) as an input
     reading = pyqtSignal(str)
 
     # init Function for the Signal class
     def __init__(self):
         QObject.__init__(self)
+
 
 #
 #
@@ -68,7 +77,8 @@ class Signal(QObject):
 
 # Making text editor as A global variable (to solve the issue of being local to (self) in widget class)
 text = QTextEdit
-text2 = QTextEdit
+ResultText = QTextEdit
+
 
 #
 #
@@ -85,6 +95,7 @@ class text_widget(QWidget):
     def __init__(self):
         super().__init__()
         self.itUI()
+
     def itUI(self):
         global text
         text = QTextEdit()
@@ -94,13 +105,11 @@ class text_widget(QWidget):
         self.setLayout(hbox)
 
 
-
 #
 #
 ############ end of Class ############
 #
 #
-
 
 
 #
@@ -119,21 +128,26 @@ class Widget(QWidget):
         self.initUI()
 
     def initUI(self):
-
         # This widget is responsible of making Tab in IDE which makes the Text editor looks nice
         tab = QTabWidget()
         tx = text_widget()
-        tab.addTab(tx, "Tab"+"1")
+        tab.addTab(tx, "Tab" + "1")
+        #Adding text Area for function
+        labelOne=QLabel()
+        labelOne.setText("function call area add your parameters")
+        global FunctionCallText
+        FunctionCallText = QTextEdit()
+        FunctionCallText.setDocumentTitle("Call your function here")
 
         # second editor in which the error messeges and succeeded connections will be shown
-        global text2
-        text2 = QTextEdit()
-        text2.setReadOnly(True)
+        global ResultText
+        ResultText = QTextEdit()
+        ResultText.setReadOnly(True)
         # defining a Treeview variable to use it in showing the directory included files
         self.treeview = QTreeView()
 
         # making a variable (path) and setting it to the root path (surely I can set it to whatever the root I want, not the default)
-        #path = QDir.rootPath()
+        # path = QDir.rootPath()
 
         path = QDir.currentPath()
 
@@ -175,7 +189,9 @@ class Widget(QWidget):
         # I defined a new splitter to seperate between the upper and lower sides of the window
         V_splitter = QSplitter(Qt.Vertical)
         V_splitter.addWidget(H_splitter)
-        V_splitter.addWidget(text2)
+        V_splitter.addWidget(ResultText)
+        V_splitter.addWidget(labelOne)
+        V_splitter.addWidget(FunctionCallText)
 
         Final_Layout = QHBoxLayout(self)
         Final_Layout.addWidget(V_splitter)
@@ -196,15 +212,15 @@ class Widget(QWidget):
         text.setText(s)
 
     def on_clicked(self, index):
-
         nn = self.sender().model().filePath(index)
         nn = tuple([nn])
 
         if nn[0]:
-            f = open(nn[0],'r')
+            f = open(nn[0], 'r')
             with f:
                 data = f.read()
                 text.setText(data)
+
 
 #
 #
@@ -221,12 +237,15 @@ def reading(s):
     b.reading.connect(Widget.Saving)
     b.reading.emit(s)
 
+
 # same as reading Function
 @pyqtSlot(str)
 def Openning(s):
     b = Signal()
     b.reading.connect(Widget.Open)
     b.reading.emit(s)
+
+
 #
 #
 #
@@ -241,7 +260,29 @@ class UI(QMainWindow):
         super().__init__()
         self.intUI()
 
+    # this function is made to get which port was selected by the user
+    @QtCore.pyqtSlot()
+    def PortClicked(self):
+        action = self.sender()
+        self.portNo = action.text()
+        self.port_flag = 0
+
+    # I made this function to save the code into a file
+    def save(self):
+        self.b.reading.emit("name")
+
+    # I made this function to open a file and exhibits it to the user in a text editor
+    def open(self):
+        file_name = QFileDialog.getOpenFileName(self, 'Open File', '/home')
+
+        if file_name[0]:
+            f = open(file_name[0], 'r')
+            with f:
+                data = f.read()
+            self.Open_Signal.reading.emit(data)
+
     def intUI(self):
+
         self.port_flag = 1
         self.b = Signal()
 
@@ -260,6 +301,7 @@ class UI(QMainWindow):
         filemenu = menu.addMenu('File')
         Port = menu.addMenu('Port')
         Run = menu.addMenu('Run')
+        RunF = menu.addMenu('Run your function')
 
         # As any PC or laptop have many ports, so I need to list them to the User
         # so I made (Port_Action) to add the Ports got from (serial_ports()) function
@@ -275,13 +317,17 @@ class UI(QMainWindow):
         # adding the menu which I made to the original (Port menu)
         Port.addMenu(Port_Action)
 
-#        Port_Action.triggered.connect(self.Port)
-#        Port.addAction(Port_Action)
+        #        Port_Action.triggered.connect(self.Port)
+        #        Port.addAction(Port_Action)
 
         # Making and adding Run Actions
         RunAction = QAction("Run", self)
         RunAction.triggered.connect(self.Run)
         Run.addAction(RunAction)
+        # Making and adding Run function Actions
+        RunfunctionAction = QAction("Run function", self)
+        RunfunctionAction.triggered.connect(self.RunF)
+        RunF.addAction(RunfunctionAction)
 
         # Making and adding File Features
         Save_Action = QAction("Save", self)
@@ -294,17 +340,14 @@ class UI(QMainWindow):
         Open_Action.setShortcut("Ctrl+O")
         Open_Action.triggered.connect(self.open)
 
-
         filemenu.addAction(Save_Action)
         filemenu.addAction(Close_Action)
         filemenu.addAction(Open_Action)
-
 
         # Seting the window Geometry
         self.setGeometry(200, 150, 600, 500)
         self.setWindowTitle('Anubis IDE')
         self.setWindowIcon(QtGui.QIcon('Anubis.png'))
-        
 
         widget = Widget()
 
@@ -315,40 +358,45 @@ class UI(QMainWindow):
     def Run(self):
         if self.port_flag == 0:
             mytext = text.toPlainText()
-        #
-        ##### Compiler Part
-        #
-#            ide.create_file(mytext)
-#            ide.upload_file(self.portNo)
-            text2.append("Sorry, there is no attached compiler.")
+            #
+            ##### Compiler Part
+            #
+            #            ide.create_file(mytext)
+            #            ide.upload_file(self.portNo)
+            ResultText.clear()
+            codeObejct = compile(mytext, 'code', 'exec')
+            with stdoutIO() as s:
+                try:
+                    exec(codeObejct)
+                except:
+                    print("Something wrong with the code")
+
+            ResultText.append(s.getvalue())
 
         else:
-            text2.append("Please Select Your Port Number First")
+            ResultText.append("Please Select Your Port Number")
+    def RunF(self):
+        if(FunctionCallText.toPlainText()== ""):
+            ResultText.append("error please call your function first")
+        else:
+            if self.port_flag == 0:
+                ResultText.clear()
+                mytext = text.toPlainText()
+                mytext = mytext +'\n' + FunctionCallText.toPlainText()
+                codeObejct = compile(mytext, 'code', 'exec')
+                with stdoutIO() as s:
+                    try:
+                        exec(codeObejct)
+                    except:
+                        print("Something wrong with the code")
+
+                ResultText.append(s.getvalue())
 
 
-    # this function is made to get which port was selected by the user
-    @QtCore.pyqtSlot()
-    def PortClicked(self):
-        action = self.sender()
-        self.portNo = action.text()
-        self.port_flag = 0
+            else:
+                ResultText.append("Please Select Your Port Number")
 
 
-
-    # I made this function to save the code into a file
-    def save(self):
-        self.b.reading.emit("name")
-
-
-    # I made this function to open a file and exhibits it to the user in a text editor
-    def open(self):
-        file_name = QFileDialog.getOpenFileName(self,'Open File','/home')
-
-        if file_name[0]:
-            f = open(file_name[0],'r')
-            with f:
-                data = f.read()
-            self.Open_Signal.reading.emit(data)
 
 
 #
@@ -360,5 +408,5 @@ class UI(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = UI()
-    # ex = Widget()
+
     sys.exit(app.exec_())
